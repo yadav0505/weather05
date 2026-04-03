@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ultimate Cinematic Weather Dashboard</title>
+    <style>
+        body { 
+            margin: 0; height: 100vh; overflow: hidden; 
+            display: flex; justify-content: center; align-items: center; 
+            font-family: 'Segoe UI', Arial, sans-serif; color: white; 
+            background: #111; transition: background 1s ease;
+        }
+
+        /* Weather Themes */
+        body.clear { background: linear-gradient(to top, #4facfe, #00f2fe); }
+        body.clouds { background: linear-gradient(to top, #757f9a, #d7dde8); }
+        body.rain { background: linear-gradient(to top, #4e54c8, #8f94fb); }
+        body.night { background: linear-gradient(to top, #0f2027, #2c5364); }
+
+        #visual-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+
+        .app { 
+            width: 350px; padding: 25px; border-radius: 40px; 
+            background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(20px); 
+            -webkit-backdrop-filter: blur(20px);
+            text-align: center; z-index: 10; border: 1px solid rgba(255,255,255,0.2); 
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6); 
+        }
+
+        #time { font-size: 50px; font-weight: 800; margin: 0; }
+        #date { font-size: 14px; opacity: 0.8; text-transform: uppercase; margin-bottom: 20px; }
+
+        .search-box { display: flex; gap: 8px; margin-bottom: 20px; }
+        input { flex: 1; padding: 12px; border-radius: 12px; border: none; background: rgba(255,255,255,0.2); color: white; outline: none; }
+        button { padding: 10px; border-radius: 12px; border: none; background: rgba(255,255,255,0.3); color: white; cursor: pointer; font-size: 20px; }
+
+        .cityName { font-size: 28px; font-weight: 600; margin: 0; }
+        .temp { font-size: 80px; font-weight: 200; margin: 5px 0; }
+        .desc { font-size: 18px; text-transform: capitalize; opacity: 0.9; margin-bottom: 15px; }
+
+        /* Stats Section */
+        .details { 
+            display: flex; justify-content: space-around; 
+            background: rgba(255,255,255,0.1); padding: 12px; 
+            border-radius: 15px; margin-bottom: 20px; font-size: 12px; 
+        }
+        .detail-item span { display: block; opacity: 0.6; font-size: 10px; text-transform: uppercase; margin-bottom: 3px; }
+        .detail-item b { font-size: 14px; }
+
+        /* Forecast Section */
+        .forecast { 
+            display: flex; justify-content: space-around; 
+            border-top: 1px solid rgba(255,255,255,0.2); 
+            padding-top: 15px; font-size: 11px; 
+        }
+
+        /* Animations */
+        .sun { position: absolute; width: 130px; height: 130px; background: radial-gradient(circle, #fff, #ffdf00, #ffaa00); border-radius: 50%; top: 10%; left: 10%; box-shadow: 0 0 80px #ffaa00; animation: pulse 3s infinite alternate; }
+        .moon { position: absolute; width: 100px; height: 100px; background: radial-gradient(circle, #fff, #ddd); border-radius: 50%; top: 12%; left: 12%; box-shadow: 0 0 40px #fff; }
+        .star { position: absolute; background: white; border-radius: 50%; animation: tw 1.5s infinite alternate; }
+        .rain-drop { position: absolute; width: 2px; height: 25px; background: rgba(255,255,255,0.4); animation: fl linear infinite; }
+
+        @keyframes fl { to { transform: translateY(110vh); } }
+        @keyframes tw { from { opacity: 0.2; } to { opacity: 1; } }
+        @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+
+        .watermark { position: fixed; bottom: 20px; right: 30px; font-size: 14px; opacity: 0.3; letter-spacing: 2px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="visual-layer"></div>
+<div class="watermark">VISHWAS YADAV</div>
+
+<div class="app">
+    <div id="time">00:00</div>
+    <div id="date">Loading...</div>
+
+    <div class="search-box">
+        <input type="text" id="cityInput" placeholder="Enter City...">
+        <button onclick="getW()">🔍</button>
+        <button onclick="getLoc()">📍</button>
+    </div>
+
+    <p class="cityName" id="cN">Delhi</p>
+    <h1 class="temp" id="mT">--°</h1>
+    <p class="desc" id="wD">Fetching...</p>
+    
+    <div class="details">
+        <div class="detail-item"><span>Precipitation</span><b id="pP">--%</b></div>
+        <div class="detail-item"><span>Humidity</span><b id="hH">--%</b></div>
+        <div class="detail-item"><span>Wind</span><b id="wW">-- km/h</b></div>
+    </div>
+    <div class="forecast" id="fB"></div>
+</div>
+
+<script>
+    const KEY = "a0519f94f1f1693f8ea5a110dc21f3c9";
+
+    // Clock
+    function updateClock() {
+        const n = new Date();
+        document.getElementById('time').innerText = n.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('date').innerText = n.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' });
+    }
+    setInterval(updateClock, 1000); updateClock();
+
+    // Weather Logic
+    async function getW(city = "") {
+        const val = city || document.getElementById('cityInput').value || "Delhi";
+        try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${val}&appid=${KEY}&units=metric`);
+            const data = await res.json();
+            if(data.cod === 200) {
+                updateUI(data);
+                getF(data.coord.lat, data.coord.lon);
+            } else { alert("City not found!"); }
+        } catch(e) { console.log("API Busy"); }
+    }
+
+    // Forecast & Precip
+    async function getF(lat, lon) {
+        try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${KEY}&units=metric`);
+            const data = await res.json();
+            document.getElementById('pP').innerText = Math.round((data.list[0].pop || 0) * 100) + "%";
+            
+            const box = document.getElementById('fB');
+            box.innerHTML = "";
+            data.list.filter(f => f.dt_txt.includes("12:00:00")).forEach(day => {
+                const dName = new Date(day.dt * 1000).toLocaleDateString('en-US', { weekday: 'short' });
+                box.innerHTML += `<div><b>${dName}</b><br>${Math.round(day.main.temp)}°</div>`;
+            });
+        } catch(e) {}
+    }
+
+    // UI Update & Animations
+    function updateUI(data) {
+        document.getElementById('cN').innerText = data.name;
+        document.getElementById('mT').innerText = Math.round(data.main.temp) + "°";
+        document.getElementById('wD').innerText = data.weather[0].description;
+        document.getElementById('hH').innerText = data.main.humidity + "%";
+        document.getElementById('wW').innerText = Math.round(data.wind.speed * 3.6) + " km/h";
+        
+        const layer = document.getElementById('visual-layer');
+        layer.innerHTML = "";
+        const main = data.weather[0].main;
+        const isNight = data.weather[0].icon.includes('n');
+
+        if(isNight) {
+            document.body.className = "night";
+            for(let i=0; i<50; i++) {
+                let s = document.createElement("div"); s.className="star";
+                s.style.left=Math.random()*100+"vw"; s.style.top=Math.random()*100+"vh";
+                s.style.width=s.style.height=Math.random()*2+"px"; layer.appendChild(s);
+            }
+            if(main === "Clear" || main === "Clouds") layer.appendChild(document.createElement("div")).className="moon";
+        } else {
+            if(main.includes("Rain")) {
+                document.body.className = "rain";
+                for(let i=0; i<80; i++) {
+                    let d = document.createElement("div"); d.className="rain-drop";
+                    d.style.left=Math.random()*100+"vw"; d.style.animationDuration=(Math.random()*0.5+0.3)+"s";
+                    layer.appendChild(d);
+                }
+            } else {
+                document.body.className = (main === "Clear") ? "clear" : "clouds";
+                layer.appendChild(document.createElement("div")).className="sun";
+            }
+        }
+    }
+function getLoc() {
+    navigator.geolocation.getCurrentPosition(async (p) => {
+        const lat = p.coords.latitude;
+        const lon = p.coords.longitude;
+
+        try {
+            const res = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${KEY}&units=metric`);
+            const data = await res.json();
+
+            if (data.cod === 200) {
+                updateUI(data);
+                getF(lat, lon);
+            } else {
+                alert("Location weather not found");
+            }
+        } catch (e) {
+            console.log("Error fetching location weather");
+        }
+    });
+}
+     
+
+    document.getElementById('cityInput').addEventListener('keypress', (e) => { if(e.key === 'Enter') getW(); });
+    window.onload = () => getW('Delhi');
+</script>
+</body>
+</html>
